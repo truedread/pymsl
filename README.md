@@ -38,7 +38,12 @@ Python library for interacting with the Netflix MSL API
 ### Methods
 
 `load_manifest(viewable_ids)` returns a manifest as a dict for the list of viewable_ids supplied
+
 `get_license(challenges)` returns licenses as a dict for the list of challenges supplied (not implemented yet)
+
+# Installation
+
+To install, you can either clone the repository and run `python setup.py install` or you can run `pip install pymsl`
 
 # To-Do
 
