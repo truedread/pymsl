@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='pymsl',
-    version='1.0',
+    version='1.1',
     description='Python library for interacting with the Netflix MSL API',
     url='https://github.com/truedread/pymsl',
     author='truedread',
@@ -11,7 +11,6 @@ setup(
     packages=['pymsl'],
     install_requires=['pycryptodomex', 'requests'],
     classifiers=[
-        'Development Status :: 4 - Beta',
         'Environment :: Console',
         'Operating System :: POSIX',
         'Programming Language :: Python :: 2.7',

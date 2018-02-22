@@ -17,7 +17,7 @@ from Cryptodome.PublicKey import RSA
 from Cryptodome.Util import Padding
 
 import pymsl.utils
-from pymsl.exceptions import ManifestError, UserAuthDataError
+from pymsl.exceptions import LicenseError, ManifestError, UserAuthDataError
 
 DEFAULTS = {
     'esn': pymsl.utils.generate_esn('NFCDCH-02-'),
@@ -67,7 +67,8 @@ class MslClient(object):
             'profiles': kwargs.get('profiles', DEFAULTS['profiles']),
             'keypair': kwargs.get('keypair', RSA.generate(2048)),
             'message_id': kwargs.get('message_id', random.randint(0, 2**52)),
-            'languages': kwargs.get('languages', DEFAULTS['languages'])
+            'languages': kwargs.get('languages', DEFAULTS['languages']),
+            'license_data': []
         }
 
         self.header = {
@@ -149,8 +150,15 @@ class MslClient(object):
             resp.json()
         except ValueError:
             manifest = self.decrypt_msl_payload(resp.text)
-            if (manifest['success'] and
-                    len(manifest['result']['viewables']) == len(viewable_ids)):
+            if (manifest.get('success') and
+                    len(manifest['result']['viewables']) ==
+                    len(set(viewable_ids))):
+                for viewable in manifest['result']['viewables']:
+                    self.msl_session['license_data'].append({
+                        'viewable_id': viewable['movieId'],
+                        'playback_context_id': viewable['playbackContextId'],
+                        'drm_context_id': viewable['drmContextId']
+                    })
                 return manifest
             raise ManifestError(manifest)
         raise ManifestError(
@@ -163,22 +171,79 @@ class MslClient(object):
         """
         get_license()
 
-        @param challenges: List of EME license requests
+        @param challenges: List of dicts with EME license requests
+                           as byte strings and session ID strings
                            that will be used to obtain licenses
 
-        @return: license (dict)
+                           challenges = [{
+                               'challenge': EME_BYTE_CHALLENGE,
+                               'session_id': SESSION_ID_STRING
+                           }]
+
+        @return: licenses (list of dicts)
 
         This function performs a license request based on
         the parameters supplied when initalizing the client
         object. If there are no errors, it will return the
-        license as a dict. If there are errors, it will
+        license as a list of dicts. If there are errors, it will
         raise a LicenseError exception with the response
         from the MSL API as the body.
 
-        This function is not yet implemented
+        Author's note: Instead of the nice and easy way to obtain
+                       manifests with multiple viewable IDs like
+                       you can with the manifest endpoint, in order
+                       to obtain multiple licenses in one swoop
+                       I had to wrap the HTTP requests in a loop.
+                       This could be easily fixed to mirror manifest
+                       acquisition if Netflix accepted playbackContextIds
+                       as a list as they do with drmContextIds and
+                       viewableIds. Since they do not do this,
+                       to my knowledge it is impossible to obtain
+                       multiple licenses for multiple viewable IDs
+                       in one HTTP request.
         """
 
-        raise NotImplementedError
+        if not isinstance(challenges, list):
+            raise TypeError('challenges must be of type list')
+
+        if not self.msl_session['license_data']:
+            raise LicenseError(
+                'Manifest must be loaded before license is acquired'
+            )
+
+        licenses = []
+        for viewable, challenge in zip(self.msl_session['license_data'],
+                                       challenges):
+            license_request_data = {
+                'method': 'license',
+                'licenseType': 'STANDARD',
+                'languages': self.msl_session['languages'],
+                'playbackContextId': viewable['playback_context_id'],
+                'drmContextIds': [viewable['drm_context_id']],
+                'challenges': [{
+                    'dataBase64': base64.b64encode(
+                        challenge.get('challenge')
+                    ).decode('utf8'),
+                    'sessionId': challenge.get('session_id')
+                }],
+                'clientTime': int(time.time()),
+                'xid': int((int(time.time()) + 0.1612) * 1000)
+            }
+
+            request_data = self.generate_msl_request_data(license_request_data)
+            resp = requests.post(url=ENDPOINTS['license'], data=request_data)
+
+            try:
+                resp.json()
+            except ValueError:
+                msl_license_data = self.decrypt_msl_payload(resp.text)
+                if msl_license_data.get('success'):
+                    licenses.append(msl_license_data['result']['licenses'][0])
+                else:
+                    raise LicenseError(msl_license_data)
+            else:
+                raise LicenseError(resp.text)
+        return licenses
 
     def perform_key_handshake(self):
         """

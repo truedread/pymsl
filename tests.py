@@ -5,7 +5,7 @@ import unittest
 from Cryptodome.PublicKey import RSA
 
 import pymsl
-from pymsl.exceptions import ManifestError, UserAuthDataError
+from pymsl.exceptions import LicenseError, ManifestError, UserAuthDataError
 
 
 class MslClientTests(unittest.TestCase):
@@ -44,6 +44,11 @@ class MslClientTests(unittest.TestCase):
 
 class MslExceptionTests(unittest.TestCase):
     """Unit tests for the MslClient exceptions"""
+
+    def test_license_exception(self):
+        """Test for LicenseError exception"""
+        client = pymsl.MslClient({'scheme': 'EMAIL_PASSWORD'})
+        self.assertRaises(LicenseError, client.get_license, [])
 
     def test_manifest_exception(self):
         """Test for ManifestError exception"""

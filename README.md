@@ -35,11 +35,50 @@ Python library for interacting with the Netflix MSL API
 ... )
 ```
 
+
 ### Methods
 
 `load_manifest(viewable_ids)` returns a manifest as a dict for the list of viewable_ids supplied
 
-`get_license(challenges)` returns licenses as a dict for the list of challenges supplied (not implemented yet)
+`get_license(challenges)` returns licenses as a list of dicts for the list of challenges supplied
+
+#### `load_manifest(viewable_ids)`
+
+```
+@param viewable_ids: List of viewable IDs
+                     to obtain manifest for
+
+@return: manifest (dict)
+
+This function performs a manifest request based on
+the parameters supplied when initalizing the client
+object. If there are no errors, it will return the
+manifest as a dict. If there are errors, it will
+raise a ManifestError exception with the response
+from the MSL API as the body.
+```
+
+#### `get_license(challenges)`
+
+```
+@param challenges: List of dicts with EME license requests
+                   as byte strings and session ID strings
+                   that will be used to obtain licenses
+
+                   challenges = [{
+                       'challenge': EME_BYTE_CHALLENGE,
+                       'session_id': SESSION_ID_STRING
+                   }]
+
+@return: licenses (list of dicts)
+
+This function performs a license request based on
+the parameters supplied when initalizing the client
+object. If there are no errors, it will return the
+license as a list of dicts. If there are errors, it will
+raise a LicenseError exception with the response
+from the MSL API as the body.
+```
 
 # Installation
 
@@ -47,5 +86,5 @@ To install, you can either clone the repository and run `python setup.py install
 
 # To-Do
 
-- [ ] Implement license acquisition
+- [x] Implement license acquisition
 - [ ] Clean up chunked payload parsing
