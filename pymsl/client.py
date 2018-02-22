@@ -185,7 +185,7 @@ class MslClient(object):
         This function performs a license request based on
         the parameters supplied when initalizing the client
         object. If there are no errors, it will return the
-        license as a list of dicts. If there are errors, it will
+        licenses as a list of dicts. If there are errors, it will
         raise a LicenseError exception with the response
         from the MSL API as the body.
 

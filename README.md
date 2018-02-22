@@ -19,6 +19,8 @@ Python library for interacting with the Netflix MSL API
 {'success': True, ...
 ```
 
+All user authentication schemes are defined in the MSL wiki: https://github.com/Netflix/msl/wiki/User-Authentication-(Configuration)
+
 ### Custom Kwargs
 
 `pymsl.MslClient()` takes additional kwargs as well to override the defaults; the only required arg for initialization is user_auth_data:
@@ -37,10 +39,6 @@ Python library for interacting with the Netflix MSL API
 
 
 ### Methods
-
-`load_manifest(viewable_ids)` returns a manifest as a dict for the list of viewable_ids supplied
-
-`get_license(challenges)` returns licenses as a list of dicts for the list of challenges supplied
 
 #### `load_manifest(viewable_ids)`
 
@@ -75,7 +73,7 @@ from the MSL API as the body.
 This function performs a license request based on
 the parameters supplied when initalizing the client
 object. If there are no errors, it will return the
-license as a list of dicts. If there are errors, it will
+licenses as a list of dicts. If there are errors, it will
 raise a LicenseError exception with the response
 from the MSL API as the body.
 ```
