@@ -1,6 +1,11 @@
 """This module stores various exceptions used by the client"""
 
 
+class KeyExchangeError(Exception):
+    """Exception for key exchange issues"""
+    pass
+
+
 class ManifestError(Exception):
     """Exception for manifest parsing issues"""
     pass

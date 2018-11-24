@@ -17,7 +17,8 @@ from Cryptodome.PublicKey import RSA
 from Cryptodome.Util import Padding
 
 import pymsl.utils
-from pymsl.exceptions import LicenseError, ManifestError, UserAuthDataError
+from pymsl.exceptions import (KeyExchangeError, LicenseError,
+                              ManifestError, UserAuthDataError)
 
 DEFAULTS = {
     'esn': pymsl.utils.generate_esn('NFCDCH-02-'),
@@ -26,18 +27,28 @@ DEFAULTS = {
         'playready-h264mpl30-dash',
         'playready-h264mpl31-dash',
         'playready-h264mpl40-dash',
+        'playready-h264hpl30-dash',
+        'playready-h264hpl31-dash',
+        'playready-h264hpl40-dash',
+        'vp9-profile0-L30-dash-cenc',
+        'vp9-profile0-L31-dash-cenc',
+        'vp9-profile0-L40-dash-cenc',
         'heaac-2-dash',
+        'dfxp-ls-sdh',
         'simplesdh',
         'nflx-cmisc',
         'BIF240',
         'BIF320'
     ],
-    'languages': ['en-US']
+    'languages': ['en-US'],
+    'extra_manifest_params': {}
 }
 
+BASE_URL = 'https://www.netflix.com/nq/msl_v1/cadmium'
+
 ENDPOINTS = {
-    'manifest': 'https://www.netflix.com/api/msl/cadmium/manifest',
-    'license': 'https://www.netflix.com/api/msl/cadmium/license',
+    'manifest': BASE_URL + '/pbo_manifests/^1.0.0/router',
+    'license': BASE_URL + '/pbo_licenses/^1.0.0/router',
 }
 
 VALID_AUTH_SCHEMES = [
@@ -68,45 +79,43 @@ class MslClient(object):
             'keypair': kwargs.get('keypair', RSA.generate(2048)),
             'message_id': kwargs.get('message_id', random.randint(0, 2**52)),
             'languages': kwargs.get('languages', DEFAULTS['languages']),
-            'license_data': []
+            'extra_manifest_params': kwargs.get(
+                'extra_manifest_params',
+                DEFAULTS['extra_manifest_params']
+            ),
+            'license_path': None
         }
 
         self.header = {
             'sender': self.msl_session['esn'],
-            'handshake': True,
-            'nonreplayable': False,
+            'renewable': True,
             'capabilities': {
                 'languages': self.msl_session['languages'],
                 'compressionalgos': ['']
             },
-            'recipient': 'Netflix',
-            'renewable': True,
             'messageid': self.msl_session['message_id'],
-            'timestamp': time.time(),
-            'keyrequestdata': [
-                {
-                    'scheme': 'ASYMMETRIC_WRAPPED',
-                    'keydata': {
-                        'publickey': base64.b64encode(
-                            self.msl_session['keypair'].publickey()
-                            .exportKey('DER')
-                        ).decode('utf8'),
-                        'mechanism': 'JWK_RSA',
-                        'keypairid': 'superKeyPair'
-                    }
+            'keyrequestdata': [{
+                'scheme': 'ASYMMETRIC_WRAPPED',
+                'keydata': {
+                    'keypairid': 'rsaKeypairId',
+                    'mechanism': 'JWK_RSA',
+                    'publickey': base64.b64encode(
+                        self.msl_session['keypair'].publickey()
+                        .exportKey('DER')
+                    ).decode('utf8')
                 }
-            ]
+            }]
         }
 
         self.msl_session['session_keys'] = self.parse_handshake(
             self.perform_key_handshake()
         )
 
-    def load_manifest(self, viewable_ids):
+    def load_manifest(self, viewable_id):
         """
         load_manifest()
 
-        @param viewable_ids: List of viewable IDs
+        @param viewable_ids: Int of viewable ID
                              to obtain manifest for
 
         @return: manifest (dict)
@@ -119,29 +128,49 @@ class MslClient(object):
         from the MSL API as the body.
         """
 
-        if not isinstance(viewable_ids, list):
-            raise TypeError('viewable_ids must be of type list')
+        if not isinstance(viewable_id, int):
+            raise TypeError('viewable_id must be of type int')
 
         manifest_request_data = {
-            'method': 'manifest',
-            'lookupType': 'STANDARD',
-            'viewableIds': viewable_ids,
-            'profiles': self.msl_session['profiles'],
-            'drmSystem': self.msl_session['drm_system'],
-            'sessionParams': {
-                'pinCapableClient': False,
-                'uiplaycontext': 'null'
-            },
-            'appId': '151881512282528171',
-            'sessionId': '151881512218179265',
-            'trackId': 0,
-            'flavor': 'STANDARD',
-            'supportPreviewContent': False,
-            'forceClearStreams': False,
-            'showAllSubDubTracks': False,
+            'version': 2,
+            'url': '/manifest',
+            'id': 15429961728572,
+            'esn': self.msl_session['esn'],
             'languages': self.msl_session['languages'],
-            'secureUrls': True
+            'uiVersion': 'shakti-v4bf615c3',
+            'clientVersion': '6.0011.511.011',
+            'params': {
+                'type': 'standard',
+                'viewableId': viewable_id,
+                'profiles': self.msl_session['profiles'],
+                'flavor': 'STANDARD',
+                'drmType': self.msl_session['drm_system'],
+                'drmVersion': 25,
+                'usePsshBox': True,
+                'isBranching': False,
+                'useHttpsStreams': True,
+                'imageSubtitleHeight': 720,
+                'uiVersion': 'shakti-v4bf615c3',
+                'clientVersion': '6.0011.511.011',
+                'supportsPreReleasePin': True,
+                'supportsWatermark': True,
+                'showAllSubDubTracks': False,
+                'videoOutputInfo': [
+                    {
+                        'type': 'DigitalVideoOutputDescriptor',
+                        'outputType': 'unknown',
+                        'supportedHdcpVersions': [],
+                        'isHdcpEngaged': False
+                    }
+                ],
+                'preferAssistiveAudio': False,
+                'isNonMember': False
+            }
         }
+
+        manifest_request_data['params'].update(
+            self.msl_session['extra_manifest_params']
+        )
 
         request_data = self.generate_msl_request_data(manifest_request_data)
         resp = requests.post(url=ENDPOINTS['manifest'], data=request_data)
@@ -150,15 +179,9 @@ class MslClient(object):
             resp.json()
         except ValueError:
             manifest = self.decrypt_msl_payload(resp.text)
-            if (manifest.get('success') and
-                    len(manifest['result']['viewables']) ==
-                    len(set(viewable_ids))):
-                for viewable in manifest['result']['viewables']:
-                    self.msl_session['license_data'].append({
-                        'viewable_id': viewable['movieId'],
-                        'playback_context_id': viewable['playbackContextId'],
-                        'drm_context_id': viewable['drmContextId']
-                    })
+            if manifest.get('result'):
+                self.msl_session['license_path'] = manifest[
+                    'result']['links']['license']['href']
                 return manifest
             raise ManifestError(manifest)
         raise ManifestError(
@@ -167,20 +190,16 @@ class MslClient(object):
             ).decode('utf8'))['errormsg']
         )
 
-    def get_license(self, challenges):
+    def get_license(self, challenge, session_id):
         """
         get_license()
 
-        @param challenges: List of dicts with EME license requests
-                           as byte strings and session ID strings
-                           that will be used to obtain licenses
+        @param challenge:  EME license request as a byte string
+                           that will be used to obtain a license
 
-                           challenges = [{
-                               'challenge': EME_BYTE_CHALLENGE,
-                               'session_id': SESSION_ID_STRING
-                           }]
+        @param session_id: DRM specific session ID passed as a string
 
-        @return: licenses (list of dicts)
+        @return: license (dict)
 
         This function performs a license request based on
         the parameters supplied when initalizing the client
@@ -188,62 +207,47 @@ class MslClient(object):
         licenses as a list of dicts. If there are errors, it will
         raise a LicenseError exception with the response
         from the MSL API as the body.
-
-        Author's note: Instead of the nice and easy way to obtain
-                       manifests with multiple viewable IDs like
-                       you can with the manifest endpoint, in order
-                       to obtain multiple licenses in one swoop
-                       I had to wrap the HTTP requests in a loop.
-                       This could be easily fixed to mirror manifest
-                       acquisition if Netflix accepted playbackContextIds
-                       as a list as they do with drmContextIds and
-                       viewableIds. Since they do not do this,
-                       to my knowledge it is impossible to obtain
-                       multiple licenses for multiple viewable IDs
-                       in one HTTP request.
         """
 
-        if not isinstance(challenges, list):
-            raise TypeError('challenges must be of type list')
+        if not isinstance(challenge, bytes):
+            raise TypeError('challenge must be of type bytes')
 
-        if not self.msl_session['license_data']:
+        if not isinstance(session_id, str):
+            raise TypeError('session_id must be of type string')
+
+        if not self.msl_session['license_path']:
             raise LicenseError(
                 'Manifest must be loaded before license is acquired'
             )
 
-        licenses = []
-        for viewable, challenge in zip(self.msl_session['license_data'],
-                                       challenges):
-            license_request_data = {
-                'method': 'license',
-                'licenseType': 'STANDARD',
-                'languages': self.msl_session['languages'],
-                'playbackContextId': viewable['playback_context_id'],
-                'drmContextIds': [viewable['drm_context_id']],
-                'challenges': [{
-                    'dataBase64': base64.b64encode(
-                        challenge.get('challenge')
-                    ).decode('utf8'),
-                    'sessionId': challenge.get('session_id')
-                }],
+        license_request_data = {
+            'version': 2,
+            'url': self.msl_session['license_path'],
+            'id': 15429961788811,
+            'esn': self.msl_session['esn'],
+            'languages': self.msl_session['languages'],
+            'uiVersion': 'shakti-v4bf615c3',
+            'clientVersion': '6.0011.511.011',
+            'params': [{
+                'sessionId': session_id,
                 'clientTime': int(time.time()),
+                'challengeBase64': base64.b64encode(challenge).decode('utf8'),
                 'xid': int((int(time.time()) + 0.1612) * 1000)
-            }
+            }],
+            'echo': 'sessionId'
+        }
 
-            request_data = self.generate_msl_request_data(license_request_data)
-            resp = requests.post(url=ENDPOINTS['license'], data=request_data)
+        request_data = self.generate_msl_request_data(license_request_data)
+        resp = requests.post(url=ENDPOINTS['license'], data=request_data)
 
-            try:
-                resp.json()
-            except ValueError:
-                msl_license_data = self.decrypt_msl_payload(resp.text)
-                if msl_license_data.get('success'):
-                    licenses.append(msl_license_data['result']['licenses'][0])
-                else:
-                    raise LicenseError(msl_license_data)
-            else:
-                raise LicenseError(resp.text)
-        return licenses
+        try:
+            resp.json()
+        except ValueError:
+            msl_license_data = self.decrypt_msl_payload(resp.text)
+            if msl_license_data.get('result'):
+                return msl_license_data
+            raise LicenseError(msl_license_data)
+        raise LicenseError(resp.text)
 
     def perform_key_handshake(self):
         """
@@ -256,7 +260,7 @@ class MslClient(object):
         and returns the response as a dict
         """
 
-        request = {
+        header = {
             'entityauthdata': {
                 'scheme': 'NONE',
                 'authdata': {
@@ -266,11 +270,25 @@ class MslClient(object):
             'signature': '',
         }
 
-        request['headerdata'] = base64.b64encode(
-            json.dumps(self.header).encode('utf8')
+        header['headerdata'] = base64.b64encode(
+            pymsl.utils.dumps(self.header).encode('utf8')
         ).decode('utf8')
 
-        resp = requests.post(url=ENDPOINTS['manifest'], json=request)
+        payload = {
+            'signature': ''
+        }
+
+        payload['payload'] = base64.b64encode(pymsl.utils.dumps({
+            'sequencenumber': 1,
+            'messageid': self.msl_session['message_id'],
+            'endofmsg': True,
+            'data': ''
+        }).encode('utf8')).decode('utf8')
+
+        request = pymsl.utils.dumps(header) + pymsl.utils.dumps(payload)
+
+        resp = requests.post(url=ENDPOINTS['manifest'], data=request)
+
         return resp.json()
 
     def parse_handshake(self, response):
@@ -282,6 +300,11 @@ class MslClient(object):
         @return: Parsed key exchange dict containing mastertoken,
                  sequence number, encryption key, and sign key
         """
+
+        if response.get('errordata'):
+            raise KeyExchangeError(
+                base64.b64decode(response['errordata']).decode('utf8')
+            )
 
         headerdata = json.loads(
             base64.b64decode(response['headerdata']).decode('utf8')
@@ -333,11 +356,10 @@ class MslClient(object):
         """
 
         header = self.header.copy()
-        header['handshake'] = False
         header['userauthdata'] = self.msl_session['user_auth_data']
 
         header_envelope = pymsl.utils.msl_encrypt(
-            self.msl_session, json.dumps(header)
+            self.msl_session, pymsl.utils.dumps(header)
         )
 
         header_signature = HMAC.new(
@@ -345,37 +367,24 @@ class MslClient(object):
             header_envelope, SHA256
         ).digest()
 
-        encrypted_header = {
+        enc_header = {
             'headerdata': base64.b64encode(header_envelope).decode('utf8'),
             'signature': base64.b64encode(header_signature).decode('utf8'),
             'mastertoken': self.msl_session['session_keys']['mastertoken'],
         }
 
-        serialized_data = [
-            {},
-            {
-                'headers': {},
-                'path': '/cbp/cadmium-13',
-                'payload': {
-                    'data': json.dumps(data).replace('"', '\"')
-                },
-                'query': ''
-            }
-        ]
-
-        serialized_data = json.dumps(serialized_data).encode('utf8')
-
         payload = {
             'messageid': self.msl_session['message_id'],
-            'data': base64.b64encode(serialized_data).decode('utf8'),
-            'compressionalgos': [''],
+            'data': base64.b64encode(
+                pymsl.utils.dumps(data).encode('utf8')
+            ).decode('utf8'),
             'sequencenumber': 1,
             'endofmsg': True
         }
 
         payload_envelope = pymsl.utils.msl_encrypt(
             self.msl_session,
-            json.dumps(payload)
+            pymsl.utils.dumps(payload)
         )
 
         payload_signature = HMAC.new(
@@ -389,7 +398,7 @@ class MslClient(object):
             'signature': base64.b64encode(payload_signature).decode('utf8')
         }
 
-        return json.dumps(encrypted_header) + json.dumps(payload_chunk)
+        return pymsl.utils.dumps(enc_header) + pymsl.utils.dumps(payload_chunk)
 
     def decrypt_msl_payload(self, payload):
         """
@@ -433,11 +442,7 @@ class MslClient(object):
             data = base64.b64decode(data).decode('utf8')
             chunks.append(data)
 
-        decrypted_payload = ''.join(chunks)
-        decrypted_payload = json.loads(decrypted_payload)[1]['payload']['data']
-        decrypted_payload = json.loads(
-            base64.b64decode(decrypted_payload).decode('utf8')
-        )
+        decrypted_payload = json.loads(''.join(chunks))
 
         return decrypted_payload
 

@@ -48,18 +48,19 @@ class MslExceptionTests(unittest.TestCase):
     def test_license_exception(self):
         """Test for LicenseError exception"""
         client = pymsl.MslClient({'scheme': 'EMAIL_PASSWORD'})
-        self.assertRaises(LicenseError, client.get_license, [])
+        self.assertRaises(LicenseError, client.get_license, b'', '')
 
     def test_manifest_exception(self):
         """Test for ManifestError exception"""
 
         client = pymsl.MslClient({'scheme': 'EMAIL_PASSWORD'})
-        self.assertRaises(ManifestError, client.load_manifest, [80092521])
+        self.assertRaises(ManifestError, client.load_manifest, 80092521)
 
     def test_user_auth_exception(self):
         """Test for UserAuthDataError exception"""
 
         self.assertRaises(UserAuthDataError, pymsl.MslClient, {})
+
 
 if __name__ == '__main__':
     unittest.main()

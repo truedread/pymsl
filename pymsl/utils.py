@@ -10,6 +10,18 @@ from Cryptodome.Cipher import AES
 from Cryptodome.Util import Padding
 
 
+def dumps(data):
+    """
+    dumps()
+
+    @param data: Data as a dict to use for creating JSON string
+
+    @return: JSON string without whitespace
+    """
+
+    return json.dumps(data, separators=(',', ':'))
+
+
 def msl_encrypt(msl_session, plaintext):
     """
     msl_encrypt()
