@@ -15,8 +15,8 @@ Python library for interacting with the Netflix MSL API
 ...     }
 ... }
 >>> client = pymsl.MslClient(user_auth_data)
->>> client.load_manifest([80092521])
-{'success': True, ...
+>>> client.load_manifest(80092521)
+{'version': 2, ...
 ```
 
 All user authentication schemes are defined in the MSL wiki: https://github.com/Netflix/msl/wiki/User-Authentication-(Configuration)
@@ -33,17 +33,57 @@ All user authentication schemes are defined in the MSL wiki: https://github.com/
 ...     profiles=LIST_OF_PROFILES, # default is ['playready-h264mpl30-dash', 'playready-h264mpl31-dash', 'playready-h264mpl40-dash', 'heaac-2-dash', 'simplesdh', 'nflx-cmisc', 'BIF240', 'BIF320']
 ...     keypair=CUSTOM_CRYPTODOME_RSA_KEYPAIR, # default is a random 2048-bit keypair
 ...     message_id=CUSTOM_MESSAGE_ID, # default is a random integer between 0 and 2^52
-...     languages=LIST_OF_LANGUAGES # default is ['en_US']
+...     languages=LIST_OF_LANGUAGES, # default is ['en_US']
+...     extra_manifest_params=EXTRA_MANIFEST_PARAMS # default is a blank dict
 ... )
 ```
 
+- `esn` is the identity used for communicating with MSL. Different ESNs have different priveleges.
+- `drm_system` will determine what kind of initialization data you will receive in the manifest.
+- `profiles` is a list of profiles used for telling MSL what you want to receive in the manifest.
+- `keypair` is the RSA keypair used in the initial key exchange.
+- `message_id` is a random integer used for identifying the MSL client session.
+- `languages` is a list of languages used for determining the language of the manifest received.
+- `extra_manifest_params` is a dict of extra manifest params. Here's the default manifest params sent in a manifest request:
+
+```python
+'params': {
+    'type': 'standard',
+    'viewableId': viewable_id,
+    'profiles': self.msl_session['profiles'],
+    'flavor': 'STANDARD',
+    'drmType': self.msl_session['drm_system'],
+    'drmVersion': 25,
+    'usePsshBox': True,
+    'isBranching': False,
+    'useHttpsStreams': True,
+    'imageSubtitleHeight': 720,
+    'uiVersion': 'shakti-v4bf615c3',
+    'clientVersion': '6.0011.511.011',
+    'supportsPreReleasePin': True,
+    'supportsWatermark': True,
+    'showAllSubDubTracks': False,
+    'videoOutputInfo': [
+        {
+            'type': 'DigitalVideoOutputDescriptor',
+            'outputType': 'unknown',
+            'supportedHdcpVersions': [],
+            'isHdcpEngaged': False
+        }
+    ],
+    'preferAssistiveAudio': False,
+    'isNonMember': False
+}
+```
+
+By using this kwarg you can add any values you want to this param dict. For example, if you wanted `showAllSubDubTracks` to be true, you would set `extra_manifest_params` to `{'showAllSubDubTracks': True}`. The manifest param dict is simply `.update()`'ed with `extra_manifest_params`, so you can overwrite default values or add new ones.
 
 ### Methods
 
-#### `load_manifest(viewable_ids)`
+#### `load_manifest(viewable_id)`
 
 ```
-@param viewable_ids: List of viewable IDs
+@param viewable_ids: Int of viewable ID
                      to obtain manifest for
 
 @return: manifest (dict)
@@ -56,19 +96,15 @@ raise a ManifestError exception with the response
 from the MSL API as the body.
 ```
 
-#### `get_license(challenges)`
+#### `get_license(challenge, session_id)`
 
 ```
-@param challenges: List of dicts with EME license requests
-                   as byte strings and session ID strings
-                   that will be used to obtain licenses
+@param challenge:  EME license request as a byte string
+                   that will be used to obtain a license
 
-                   challenges = [{
-                       'challenge': EME_BYTE_CHALLENGE,
-                       'session_id': SESSION_ID_STRING
-                   }]
+@param session_id: DRM specific session ID passed as a string
 
-@return: licenses (list of dicts)
+@return: license (dict)
 
 This function performs a license request based on
 the parameters supplied when initalizing the client
