@@ -106,7 +106,7 @@ class MslClient(object):
                 }
             }]
         }
-
+        self.proxies =  kwargs.get('proxies', None)
         self.msl_session['session_keys'] = self.parse_handshake(
             self.perform_key_handshake()
         )
@@ -173,7 +173,7 @@ class MslClient(object):
         )
 
         request_data = self.generate_msl_request_data(manifest_request_data)
-        resp = requests.post(url=ENDPOINTS['manifest'], data=request_data)
+        resp = requests.post(url=ENDPOINTS['manifest'], data=request_data, proxies=self.proxies)
 
         try:
             resp.json()
@@ -238,7 +238,7 @@ class MslClient(object):
         }
 
         request_data = self.generate_msl_request_data(license_request_data)
-        resp = requests.post(url=ENDPOINTS['license'], data=request_data)
+        resp = requests.post(url=ENDPOINTS['license'], data=request_data, proxies=self.proxies)
 
         try:
             resp.json()
@@ -287,7 +287,7 @@ class MslClient(object):
 
         request = pymsl.utils.dumps(header) + pymsl.utils.dumps(payload)
 
-        resp = requests.post(url=ENDPOINTS['manifest'], data=request)
+        resp = requests.post(url=ENDPOINTS['manifest'], data=request, proxies=self.proxies)
 
         return resp.json()
 

@@ -81,6 +81,18 @@ All user authentication schemes are defined in the MSL wiki: https://github.com/
 
 By using this kwarg you can add any values you want to this param dict. For example, if you wanted `showAllSubDubTracks` to be true, you would set `extra_manifest_params` to `{'showAllSubDubTracks': True}`. The manifest param dict is simply `.update()`'ed with `extra_manifest_params`, so you can overwrite default values or add new ones.
 
+#### Proxies
+If you want to proxy the msl request you can supply a kwarg named proxies with the value of a valid proxy configuration accepted by requests
+
+```python
+proxies = {
+  'http': 'http://10.10.1.10:3128',
+  'https': 'http://10.10.1.10:1080',
+}
+
+msl_client = pymsl.MslClient(proxies=proxies)
+```
+
 ### Methods
 
 #### `load_manifest(viewable_id)`
