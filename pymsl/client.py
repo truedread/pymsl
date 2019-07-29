@@ -41,6 +41,13 @@ DEFAULTS = {
         'BIF320'
     ],
     'languages': ['en-US'],
+    'key_request_data': {
+        'scheme': 'ASYMMETRIC_WRAPPED',
+        'keydata': {
+            'keypairid': 'rsaKeypairId',
+            'mechanism': 'JWK_RSA'
+        }
+    },
     'extra_manifest_params': {}
 }
 
@@ -61,7 +68,7 @@ VALID_AUTH_SCHEMES = [
 ]
 
 
-class MslClient(object):
+class MslClient:
     """This class holds the functions for MSL API interaction"""
 
     def __init__(self, user_auth_data, **kwargs):
@@ -79,12 +86,25 @@ class MslClient(object):
             'keypair': kwargs.get('keypair', RSA.generate(2048)),
             'message_id': kwargs.get('message_id', random.randint(0, 2**52)),
             'languages': kwargs.get('languages', DEFAULTS['languages']),
+            'proxies': kwargs.get('proxies', None),
+            'key_request_data': kwargs.get(
+                'key_request_data',
+                DEFAULTS['key_request_data']
+            ),
             'extra_manifest_params': kwargs.get(
                 'extra_manifest_params',
                 DEFAULTS['extra_manifest_params']
             ),
             'license_path': None
         }
+
+        if self.msl_session['key_request_data'][
+                'scheme'] == 'ASYMMETRIC_WRAPPED':
+            self.msl_session['key_request_data']['keydata'][
+                'publickey'] = base64.b64encode(
+                    self.msl_session['keypair'].publickey()
+                    .exportKey('DER')
+                ).decode('utf8')
 
         self.header = {
             'sender': self.msl_session['esn'],
@@ -94,19 +114,9 @@ class MslClient(object):
                 'compressionalgos': ['']
             },
             'messageid': self.msl_session['message_id'],
-            'keyrequestdata': [{
-                'scheme': 'ASYMMETRIC_WRAPPED',
-                'keydata': {
-                    'keypairid': 'rsaKeypairId',
-                    'mechanism': 'JWK_RSA',
-                    'publickey': base64.b64encode(
-                        self.msl_session['keypair'].publickey()
-                        .exportKey('DER')
-                    ).decode('utf8')
-                }
-            }]
+            'keyrequestdata': [self.msl_session['key_request_data']]
         }
-        self.proxies =  kwargs.get('proxies', None)
+
         self.msl_session['session_keys'] = self.parse_handshake(
             self.perform_key_handshake()
         )
@@ -173,7 +183,11 @@ class MslClient(object):
         )
 
         request_data = self.generate_msl_request_data(manifest_request_data)
-        resp = requests.post(url=ENDPOINTS['manifest'], data=request_data, proxies=self.proxies)
+        resp = requests.post(
+            url=ENDPOINTS['manifest'],
+            data=request_data,
+            proxies=self.msl_session['proxies']
+        )
 
         try:
             resp.json()
@@ -238,7 +252,11 @@ class MslClient(object):
         }
 
         request_data = self.generate_msl_request_data(license_request_data)
-        resp = requests.post(url=ENDPOINTS['license'], data=request_data, proxies=self.proxies)
+        resp = requests.post(
+            url=ENDPOINTS['license'],
+            data=request_data,
+            proxies=self.msl_session['proxies']
+        )
 
         try:
             resp.json()
@@ -286,8 +304,11 @@ class MslClient(object):
         }).encode('utf8')).decode('utf8')
 
         request = pymsl.utils.dumps(header) + pymsl.utils.dumps(payload)
-
-        resp = requests.post(url=ENDPOINTS['manifest'], data=request, proxies=self.proxies)
+        resp = requests.post(
+            url=ENDPOINTS['manifest'],
+            data=request,
+            proxies=self.msl_session['proxies']
+        )
 
         return resp.json()
 
