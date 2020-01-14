@@ -43,7 +43,7 @@ All user authentication schemes are defined in the MSL wiki: https://github.com/
 ... )
 ```
 
-- `esn` is the identity used for communicating with MSL. Different ESNs have different priveleges.
+- `esn` is the identity used for communicating with MSL. Different ESNs have different privileges.
 - `drm_system` will determine what kind of initialization data you will receive in the manifest.
 - `profiles` is a list of profiles used for telling MSL what you want to receive in the manifest.
 - `keypair` is the RSA keypair used in the initial key exchange.
